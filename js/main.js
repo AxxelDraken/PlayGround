@@ -17,47 +17,63 @@ import { buildEndingData } from './story.js';
 import { hooks } from './hooks.js';
 import {
   $, showScreen, hideHud, updateHud, fade, toast, escapeHtml, touchModeOn, formatTime,
+  renderHud, renderInteract, renderDialogue, dialogue, canvasDialoguePointer,
 } from './engine/ui-core.js';
 
 const canvas = $('#game');
 const ctx = canvas.getContext('2d');
-let viewW = window.innerWidth;
-let viewH = window.innerHeight;
-let dpr = Math.min(2, window.devicePixelRatio || 1);
+const LOGICAL_W = 320;
+const LOGICAL_H = 180;
+let scale = 1;
+let viewW = LOGICAL_W;
+let viewH = LOGICAL_H;
 let mode = 'title'; // title | create | world | ending
 let lastFrame = 0;
 let booted = false;
+window.__dbg = { get mode() { return mode; } };
+window.__runContinue = continueGame;
+
+export { mode };
 
 // ── sizing ─────────────────────────────────────────────────────
 function resize() {
-  const w = Math.max(320, Math.round(window.innerWidth));
-  const h = Math.max(320, Math.round(window.innerHeight));
-  dpr = Math.min(2, window.devicePixelRatio || 1);
-  viewW = w;
-  viewH = h;
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.imageSmoothingEnabled = true;
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight;
+  let s = Math.min(Math.floor(maxW / LOGICAL_W), Math.floor(maxH / LOGICAL_H), 4);
+  if (s < 1) s = 1;
+  scale = s;
+  viewW = LOGICAL_W;
+  viewH = LOGICAL_H;
+  canvas.width = LOGICAL_W;
+  canvas.height = LOGICAL_H;
+  canvas.style.width = LOGICAL_W * s + 'px';
+  canvas.style.height = LOGICAL_H * s + 'px';
+  canvas.style.left = '50%';
+  canvas.style.top = '50%';
+  canvas.style.transform = 'translate(-50%, -50%)';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
 }
 
 // ── scene loop ─────────────────────────────────────────────────
 function frame(now) {
   const dt = Math.min(48, Math.max(0, now - (lastFrame || now)));
   lastFrame = now;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
   if (mode === 'world') {
     if (battleState.active) {
-      renderBattle(ctx, viewW, viewH, battleState, now);
+      renderBattle(ctx, LOGICAL_W, LOGICAL_H, battleState, now);
     } else {
-      updateWorld(dt, viewW, viewH);
-      renderWorldScene(ctx, viewW, viewH, now);
+      updateWorld(dt, LOGICAL_W, LOGICAL_H);
+      renderWorldScene(ctx, LOGICAL_W, LOGICAL_H, now);
+      renderHud(ctx, now);
+      renderInteract(ctx, world.camx, world.camy, now);
+      renderDialogue(ctx, now);
     }
   } else {
     // Title backdrop remains behind creation and ending screens.
-    renderTitle(ctx, viewW, viewH, now);
+    renderTitle(ctx, LOGICAL_W, LOGICAL_H, now);
   }
   requestAnimationFrame(frame);
 }
@@ -298,6 +314,16 @@ function boot() {
   };
   document.addEventListener('pointerdown', wake, { passive: true });
   document.addEventListener('keydown', wake);
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (mode === 'world' && dialogue.open) {
+      const rect = canvas.getBoundingClientRect();
+      const s = canvas.clientWidth / LOGICAL_W;
+      const lx = (e.clientX - rect.left) / s;
+      const ly = (e.clientY - rect.top) / s;
+      if (canvasDialoguePointer(lx, ly)) e.preventDefault();
+    }
+  });
 
   window.addEventListener('beforeunload', () => {
     if (state.started && !state.ending) saveGame(true);

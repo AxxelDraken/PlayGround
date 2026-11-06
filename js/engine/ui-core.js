@@ -1,7 +1,12 @@
 import { state, mainObjective, statBlock } from '../state.js';
+import { ZONES } from '../data/zones.js';
 import { CLASSES, PALETTES } from '../data/classes.js';
 import { audio } from './audio.js';
-import { drawPortrait, drawFace, TAU } from './art.js';
+import { drawPortrait, drawFace, TAU, drawPerson, paletteFor, clamp } from './art.js';
+import { mode } from '../main.js';
+import {
+  PAL, TILE, drawWindow, drawText, drawChoice, drawArrow, pr, measureText,
+} from './pixel.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -274,7 +279,42 @@ function formatCine(s) {
 }
 
 // ── dialogue ──────────────────────────────────────────────────
+// ── canvas dialogue state (world mode, pixel JRPG window) ────────────────
+export const dialogue = {
+  open: false,
+  speaker: '',
+  text: '',
+  full: '',
+  choices: [],
+  idx: 0,
+  typing: true,
+  pos: 0,
+  last: 0,
+  hitBoxes: [],
+  resolveSay: null,
+  resolveChoice: null,
+};
+
+function sayCanvas(speaker, text, opts = {}) {
+  return new Promise((resolve) => {
+    const d = dialogue;
+    d.open = true; ui.dialogueOpen = true;
+    d.speaker = speaker || 'Narrator';
+    d.full = text;
+    d.choices = [];
+    d.idx = 0;
+    d.typing = true;
+    d.pos = 0;
+    d.last = performance.now();
+    d.hitBoxes = [];
+    d.resolveSay = resolve;
+    d.resolveChoice = null;
+    audio.sfx('page');
+  });
+}
+
 export function say(speaker, text, opts = {}) {
+  if (mode === 'world') return sayCanvas(speaker, text, opts);
   return new Promise((resolve) => {
     const dlg = $('#dialogue');
     dlg.classList.remove('hidden');
@@ -314,6 +354,21 @@ export function say(speaker, text, opts = {}) {
 }
 
 export function choice(options) {
+  if (mode === 'world') {
+    return new Promise((resolve) => {
+      const d = dialogue;
+      d.open = true; ui.dialogueOpen = true;
+      d.choices = options.filter((o) => !o.hide);
+      d.idx = 0;
+      d.typing = false;
+      d.pos = 0;
+      d.hitBoxes = [];
+      d.resolveChoice = resolve;
+      d._choiceResolve = resolve;
+      d.resolveSay = null;
+      audio.sfx('page');
+    });
+  }
   return new Promise((resolve) => {
     const box = $('#dlg-choices');
     box.innerHTML = '';
@@ -346,15 +401,192 @@ export function choice(options) {
 
 export function closeDialogue() {
   $('#dialogue').classList.add('hidden');
+  const d = dialogue;
+  d.open = false;
   ui.dialogueOpen = false;
-  ui.resolveSay = null;
-  ui.resolveChoice = null;
+  d.resolveSay = null;
+  d.resolveChoice = null;
+  d.hitBoxes = [];
   clearInterval(ui.typing); ui.typing = null;
 }
 
 export function advanceDialogue() {
+  const d = dialogue;
+  if (mode === 'world') {
+    if (d.resolveChoice) return;
+    if (d.typing) { d.pos = d.full.length; return; }
+    if (d.resolveSay) { audio.sfx('click'); d.resolveSay(); }
+    return;
+  }
   if (ui.resolveChoice) return;
   if (ui.resolveSay) ui.resolveSay();
+}
+
+export function finishTyping() {
+  const d = dialogue;
+  if (d.typing) d.pos = d.full.length;
+}
+
+
+
+export function renderPortraitSprite(ctx, speaker, x, y, w, h) {
+  const cvs = document.createElement('canvas');
+  cvs.width = w; cvs.height = h;
+  const def = portraitDef(speaker);
+  drawPortrait(cvs, def, { dpr: 1 });
+  ctx.drawImage(cvs, x, y, w, h);
+}
+
+// ── canvas HUD ───────────────────────────────────────────────────────────
+export function renderHud(ctx, now) {
+  if (!state.party || !state.party.length) return;
+  const dpr = 1;
+  const chipW = 94, chipH = 24, gap = 5;
+  let x = 8;
+  for (const m of state.party) {
+    const st = statBlock(m);
+    const low = m.hp < st.maxHp * 0.3;
+    drawWindow(ctx, x, 5, chipW, chipH, {
+      fill: '#241e2a',
+      accent: low ? '#d9564f' : (m.mp < st.maxMp * 0.3 ? '#83b6e8' : '#f0c27a'),
+    });
+    // mini face (12×18)
+    const fc = document.createElement('canvas');
+    fc.width = 12; fc.height = 18;
+    const fctx = fc.getContext('2d');
+    fctx.imageSmoothingEnabled = false;
+    drawPerson(fctx, 6, 16, 12, {
+      classId: m.classId, palette: paletteFor(m), facing: 'down', walk: 0,
+      time: now / 1000, role: '', scale: 0.75,
+    });
+    ctx.drawImage(fc, x + 5, 4, 12, 18);
+    ctx.fillStyle = '#e8ddc8';
+    drawText(ctx, m.name, x + 19, 8, { color: '#e8ddc8' });
+    drawText(ctx, `L${m.level}`, x + chipW - 24, 8, { color: '#a69c86', align: 'right' });
+    const barY = 16;
+    drawText(ctx, 'HP', x + 19, barY, { color: '#8a9c8c' });
+    drawBar(ctx, x + 34, barY, chipW - 44, m.hp / st.maxHp, low ? '#d9564f' : '#7fc272');
+    drawText(ctx, 'MP', x + 19, barY + 7, { color: '#8a8cb2' });
+    drawBar(ctx, x + 34, barY + 7, chipW - 44, m.mp / st.maxMp, '#5c8fd6');
+    x += chipW + gap;
+  }
+  // zone + clock
+  const zone = state.zone && ZONES?.[state.zone];
+  // zone name banner
+  if (zone) {
+    const zw = 132, zh = 26;
+    const zx = 160 - zw / 2;
+    drawWindow(ctx, zx, 5, zw, zh, { fill: '#241e2a', accent: '#f0c27a' });
+    drawText(ctx, zone.name.toUpperCase(), zx + 8, 10, { color: '#f0d8b8' });
+    drawText(ctx, (mainObjective && mainObjective() || ''), zx + 8, 18, { color: '#a69c86' });
+  }
+  const clockW = 54, clockH = 16;
+  drawWindow(ctx, 320 - clockW - 8, 5, clockW, clockH, { fill: '#241e2a', accent: '#f0c27a' });
+  drawText(ctx, clockLabel ? clockLabel() : 'DUSK', 320 - clockW - 8 + 7, 10, { color: '#d8c8b0' });
+}
+
+function drawBar(ctx, x, y, w, ratio, color) {
+  pr(ctx, x, y, w, 3, '#1a141a');
+  const fill = Math.max(0, Math.min(w, Math.round(w * ratio)));
+  if (fill) pr(ctx, x, y, fill, 3, color);
+  ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, 3);
+}
+
+// ── interact prompt ──────────────────────────────────────────────────────
+export function showInteract(label) {
+  const p = $('#interact-prompt');
+  if (p) p.classList.add('hidden');
+  if (!label) { ui.nearLabel = null; return; }
+  const near = dialogue && dialogue.near;
+  ui.nearLabel = { x: near ? near.x : 0, y: near ? near.y : 0, text: label };
+}
+
+export function renderInteract(ctx, camx, camy, now) {
+  const nl = ui.nearLabel;
+  if (!nl) return;
+  const sx = Math.round(nl.x * TILE - camx);
+  const sy = Math.round(nl.y * TILE - camy) - 10;
+  const w = measureText(nl.text, 1).width + 14;
+  const x = clamp(sx - w / 2 + 8, 6, 320 - w - 6);
+  drawWindow(ctx, x, sy, w, 12, { fill: '#262230', accent: '#f0c27a' });
+  drawText(ctx, nl.text.toUpperCase(), x + 7, sy + 2, { color: '#e8ddc8' });
+}
+
+// ── canvas dialogue render ───────────────────────────────────────────────
+export function renderDialogue(ctx, now) {
+  const d = dialogue;
+  if (!d.open) return;
+  const W = 320, H = 180;
+  const bw = 284;
+  const choiceH = d.choices.length ? d.choices.length * 10 + 6 : 0;
+  const bh = 46 + choiceH;
+  const bx = 18, by = H - bh - 8;
+  drawWindow(ctx, bx, by, bw, bh, { fill: '#241e2a', accent: '#f0c27a' });
+
+  // portrait
+  renderPortraitSprite(ctx, d.speaker, bx + 7, by + 7, 30, 36);
+
+  // name
+  drawText(ctx, d.speaker.toUpperCase(), bx + 42, by + 6, { color: '#f0c27a' });
+
+  // typing
+  if (d.typing) {
+    const elapsed = now - d.last;
+    d.pos += (elapsed / 14) * 2;
+    d.last = now;
+    if (d.pos >= d.full.length) { d.pos = d.full.length; d.typing = false; }
+  }
+  const textColor = '#e8ddc8';
+  drawText(ctx, d.full.slice(0, Math.floor(d.pos)), bx + 42, by + 17, {
+    color: textColor, wrap: true, maxWidth: bw - 60,
+  });
+
+  // choices
+  if (d.choices.length) {
+    d.hitBoxes = [];
+    let cy = by + bh - d.choices.length * 10 - 6;
+    d.choices.forEach((o, i) => {
+      const sel = i === d.idx;
+      const label = (i + 1) + '. ' + o.text + (o.note ? `  <${o.note}>` : '');
+      drawChoice(ctx, bx + 10, cy, bw - 20, 9, label, sel, { accent: '#f0c27a' });
+      d.hitBoxes.push({ y: cy, h: 9, value: o.value, req: o.req });
+      cy += 10;
+    });
+  } else if (!d.typing) {
+    drawArrow(ctx, bx + bw - 14, by + bh - 9, 'down', '#f0c27a');
+  }
+}
+
+export function canvasDialoguePointer(x, y) {
+  const d = dialogue;
+  if (!d.open) return false;
+  if (d.resolveChoice) {
+    for (const hb of d.hitBoxes) {
+      if (y >= hb.y && y <= hb.y + hb.h && x >= 28 && x <= 302) {
+        if (hb.req === false) return true;
+        resolveChoiceIdxLocal(hb.value);
+        return true;
+      }
+    }
+    return true;
+  }
+  if (d.typing) { d.pos = d.full.length; return true; }
+  if (d.resolveSay) { audio.sfx('click'); d.resolveSay(); }
+  return true;
+}
+
+function resolveChoiceIdxLocal(value) {
+  const d = dialogue;
+  const o = d.choices.find((c) => c.value === value);
+  if (!o || o.req === false) return;
+  audio.sfx('confirm');
+  d.open = false; ui.dialogueOpen = false;
+  d.resolveChoice = null;
+  d.hitBoxes = [];
+  d.resolveSay = null;
+  // resolve the choice promise: stored at creation
+  if (d._choiceResolve) { const r = d._choiceResolve; d._choiceResolve = null; r(o.value); }
 }
 
 function formatDlg(s) {
@@ -371,9 +603,30 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if (ui.cinematicOpen) return;
-  if (ui.dialogueOpen && !ui.resolveChoice && (e.key === 'Enter' || e.key === ' ')) {
-    e.preventDefault();
-    advanceDialogue();
+  const d = dialogue;
+  if (ui.dialogueOpen && d.open) {
+    if (d.resolveChoice && /^[1-9]$/.test(e.key)) {
+      e.preventDefault();
+      const idx = Number(e.key) - 1;
+      if (d.choices[idx] && d.choices[idx].req !== false) {
+        audio.sfx('confirm');
+        d.idx = idx;
+      }
+    } else if (d.resolveChoice && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      d.idx = (d.idx + 1) % d.choices.length;
+    } else if (d.resolveChoice && (e.key === 'ArrowUp' || e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      d.idx = (d.idx - 1 + d.choices.length) % d.choices.length;
+    } else if (d.resolveChoice && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      const o = d.choices[d.idx];
+      if (o && o.req !== false) resolveChoiceIdxLocal(o.value);
+    } else if (!d.resolveChoice && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      advanceDialogue();
+    }
+    return;
   }
   if (ui.dialogueOpen && ui.resolveChoice && /^[1-9]$/.test(e.key)) {
     e.preventDefault();
@@ -441,13 +694,6 @@ export function updateHud(zone) {
   $('#hud-clock').textContent = clockLabel();
   renderPartyHud();
   updateHudBars();
-}
-
-export function showInteract(label) {
-  const p = $('#interact-prompt');
-  if (!label) { p.classList.add('hidden'); return; }
-  $('#interact-label').textContent = label;
-  p.classList.remove('hidden');
 }
 
 export function setMinimap(zone, npcs) {

@@ -2,6 +2,8 @@ import { state, statBlock, restoreParty, addItem, addGold, addGear, syncVitals, 
 import { ZONES } from './data/zones.js';
 import { ITEMS } from './data/items.js';
 import { PALETTES } from './data/classes.js';
+import { PAL, CHAR_PALS } from './engine/pixel.js';
+import { shade } from './engine/art.js';
 import { audio } from './engine/audio.js';
 import { renderWorld, drawMinimap } from './engine/world-render.js';
 import {
@@ -31,6 +33,7 @@ export const world = {
   timeAcc: 0,
   hudAcc: 0,
   miniAcc: 0,
+  wanderAcc: 0,
   wantInteract: null,
   initialized: false,
 };
@@ -178,17 +181,13 @@ export function refreshWorld() {
 }
 
 function snapCamera() {
-  const canvas = $('#game');
-  const W = canvas.clientWidth || window.innerWidth, H = canvas.clientHeight || window.innerHeight;
-  const T = tileScale(W, H);
+  const W = 320, H = 180;
   const map = world.zone.map;
-  world.camx = clampCam(world.player.px * T + T / 2 - W / 2, map.w * T, W);
-  world.camy = clampCam(world.player.py * T + T / 2 - H / 2, map.h * T, H);
+  world.camx = clampCam(world.player.px * TILE + TILE / 2 - W / 2, map.w * TILE, W);
+  world.camy = clampCam(world.player.py * TILE + TILE / 2 - H / 2, map.h * TILE, H);
 }
 
-function tileScale(W, H) {
-  return Math.max(34, Math.min(58, Math.min(W / 9.6, H / 6.6)));
-}
+const TILE = 16;
 function clampCam(v, mapPx, viewPx) {
   if (mapPx <= viewPx) return (mapPx - viewPx) / 2;
   return Math.max(0, Math.min(mapPx - viewPx, v));
@@ -247,11 +246,10 @@ function findPath(start, goal, maxNodes = 900) {
 }
 
 function onTap(cx, cy) {
-  const canvas = $('#game');
-  const W = canvas.clientWidth, H = canvas.clientHeight;
-  const T = tileScale(W, H);
-  const wx = (cx + world.camx) / T;
-  const wy = (cy + world.camy) / T;
+  const T = 16;
+  const s = $('#game').clientWidth / 320 || 1;
+  const wx = (cx / s + world.camx) / T;
+  const wy = (cy / s + world.camy) / T;
   const tx = Math.floor(wx), ty = Math.floor(wy);
   let target = { x: tx, y: ty };
   const obj = interactables().find((o) => o.x === tx && o.y === ty);
@@ -331,11 +329,28 @@ export function updateWorld(dt, W, H) {
       }
     }
     // camera
-    const T = tileScale(W, H);
-    const targetX = p.px * T + T / 2 - W / 2;
-    const targetY = p.py * T + T / 2 - H / 2 + (H > W ? H * .04 : 0);
-    world.camx += (clampCam(targetX, world.zone.map.w * T, W) - world.camx) * Math.min(1, dt / 90);
-    world.camy += (clampCam(targetY, world.zone.map.h * T, H) - world.camy) * Math.min(1, dt / 90);
+    const targetX = p.px * TILE + TILE / 2 - 160;
+    const targetY = p.py * TILE + TILE / 2 - 90 + 6;
+    world.camx += (clampCam(targetX, world.zone.map.w * TILE, 320) - world.camx) * Math.min(1, dt / 90);
+    world.camy += (clampCam(targetY, world.zone.map.h * TILE, 180) - world.camy) * Math.min(1, dt / 90);
+
+    // gentle NPC wander for festival life
+    world.wanderAcc += dt;
+    if (world.wanderAcc > 1200) {
+      world.wanderAcc = 0;
+      const dirs = Object.values(DIRS);
+      for (const n of world.npcs) {
+        if (!n.wander) continue;
+        if (Math.random() < .6) { n.facing = ['up','down','left','right'][Math.floor(Math.random() * 4)]; continue; }
+        const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+        const nx = n.x + dx, ny = n.y + dy;
+        const occupied = world.npcs.some((o) => o.x === nx && o.y === ny);
+        if (isWalkable(nx, ny) && !occupied && !(nx === p.x && ny === p.y)) {
+          n.facing = dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up';
+          n.px = n.x = nx; n.py = n.y = ny;
+        }
+      }
+    }
   }
   // timers
   world.hudAcc += dt;
@@ -659,18 +674,36 @@ export async function runDialogue(id, npc = null) {
 export function renderWorldScene(ctx, W, H, now) {
   const zone = world.zone;
   if (!zone) return;
-  const T = tileScale(W, H);
+  const T = TILE;
   const p = world.player;
   const hero = state.party.find((m) => m.id === 'hero');
   const pal = PALETTES[hero?.palette ?? 0] || PALETTES[0];
   const near = nearestInteractable();
+  const litTiles = new Set((state.litBraziers || []).map((b) => `${b.x},${b.y}`));
+  const lights = [];
+  for (const b of zone.braziers || []) {
+    if (state.litBraziers.includes(b.id)) lights.push({ x: b.x * TILE + TILE / 2, y: b.y * TILE + TILE * 0.3, r: TILE * 2.2, glow: '#ffb066', strength: 1 });
+  }
+  for (const c of zone.crystals || []) lights.push({ x: c.x * TILE + TILE / 2, y: c.y * TILE + TILE / 2, r: TILE * 2.4, glow: '#7fe8d0', strength: 1 });
+  for (const portal of zone.portals || []) lights.push({ x: portal.x * TILE + TILE / 2, y: portal.y * TILE + TILE * 0.4, r: TILE * 1.6, glow: PAL?.amber ?? '#f0c27a', strength: 0.5 });
+  const playerLanternX = p.px * TILE + TILE / 2, playerLanternY = p.py * TILE + TILE * 0.4;
+  lights.push({ x: playerLanternX, y: playerLanternY, r: TILE * 2.6, glow: '#ffd29a', strength: 0.5 });
+
+  const npcsWithPal = world.npcs.map((n) => {
+    const base = CHAR_PALS[n.sprite] || CHAR_PALS.villager;
+    return { ...n, pal: { ...base, accent: n.color || base.accent } };
+  });
+
   const view = {
-    zone, tile: T, camx: world.camx, camy: world.camy, now,
+    zone, camx: world.camx, camy: world.camy, now,
+    timeCycle: state.time,
+    litTiles,
+    lights,
     player: {
       x: p.x, y: p.y, px: p.px, py: p.py, facing: p.facing, moving: p.moving,
-      classId: hero?.classId, palette: { ...pal, accent: undefined },
+      classId: hero?.classId, palette: pal, pants: shade(pal.cloth, -20), boots: '#282228',
     },
-    npcs: world.npcs,
+    npcs: npcsWithPal,
     chests: zone.chests || [],
     crystals: zone.crystals || [],
     braziers: zone.braziers || [],

@@ -42,7 +42,11 @@ button { cursor: pointer; border: 0; background: none; }
 h1, h2, h3, h4 { font-family: var(--serif); font-weight: 500; margin: 0; letter-spacing: .01em; }
 .hidden { display: none !important; }
 #app { position: fixed; inset: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 20%, #18202e 0%, #080a10 62%); }
-#game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: auto; }
+#game {
+  position: absolute; left: 50%; top: 50%; width: 320px; height: 180px;
+  display: block; image-rendering: pixelated;
+  transform: translate(-50%, -50%); image-rendering: -webkit-optimize-contrast;
+}
 #grain {
   position: absolute; inset: 0; pointer-events: none; opacity: .16; z-index: 3;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.4'/%3E%3C/svg%3E");
@@ -214,7 +218,11 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 500; margin: 0; letter-
 .create-summary .cs-sp { margin-left: auto; color: var(--ember); font-size: 11px; letter-spacing: .1em; text-align: right; }
 
 /* ── HUD ────────────────────────────────────────────────── */
+/* In-game HUD (party, zone, clock, interact) is drawn on the
+   pixel canvas. Keep only the minimap + menu button in the DOM. */
 #hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+.hud-party, .hud-zone, #hud-clock, .interact-prompt, #dialogue { display: none !important; }
+#hud-map { border: 2px solid #f0c27a; border-radius: 0; }
 .hud-top { display: flex; gap: 12px; align-items: flex-start; padding: calc(10px + var(--safe-t)) calc(12px + var(--safe-r)) 0 calc(12px + var(--safe-l)); }
 .hud-party { display: flex; flex-direction: column; gap: 5px; min-width: 168px; }
 .party-chip {
@@ -286,34 +294,33 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 500; margin: 0; letter-
 .zone-banner .zb-rule:last-child { transform: scaleX(-1); }
 @keyframes zodIn { 0% { opacity: 0; transform: translate(-50%, 10px); } 20%,72% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }
 
-/* touch controls */
-.touch-controls { position: absolute; inset: auto 0 0 0; height: 190px; pointer-events: none; display: none; }
+/* touch controls (pixel D-pad) */
+.touch-controls { position: absolute; inset: auto 0 0 0; height: 156px; pointer-events: none; display: none; }
 body.touch .touch-controls, body.show-touch .touch-controls { display: block; }
 .joystick {
-  position: absolute; left: calc(24px + var(--safe-l)); bottom: calc(26px + var(--safe-b)); width: 132px; height: 132px;
-  border-radius: 50%; pointer-events: auto; touch-action: none;
-  background: radial-gradient(circle, rgba(20,27,38,.5), rgba(9,12,19,.25)); border: 1px solid rgba(255,255,255,.1);
-  box-shadow: inset 0 0 30px rgba(0,0,0,.4);
+  position: absolute; left: calc(20px + var(--safe-l)); bottom: calc(20px + var(--safe-b));
+  width: 110px; height: 110px; pointer-events: auto; touch-action: none;
+  border: 2px solid rgba(240,178,122,.35); background: rgba(12,16,24,.85);
+  box-shadow: inset 0 0 20px rgba(0,0,0,.6);
 }
-.joy-ring { position: absolute; inset: 14px; border-radius: 50%; border: 1px dashed rgba(240,178,122,.18); }
+.joy-ring { display: none; }
 .joy-knob {
-  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 28%, #f5c28c, #c2733d 55%, #7a3d21);
-  border: 1px solid rgba(255,219,178,.6); box-shadow: 0 4px 22px rgba(240,140,60,.35);
-  transition: transform .07s linear; touch-action: none;
+  position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 0;
+  border: 2px solid rgba(240,178,122,.55); background: radial-gradient(circle at 35% 28%, #f5c28c, #c2733d 55%, #7a3d21);
+  box-shadow: 0 4px 16px rgba(240,140,60,.35); touch-action: none;
 }
-.touch-actions { position: absolute; right: calc(22px + var(--safe-r)); bottom: calc(28px + var(--safe-b)); display: flex; align-items: flex-end; gap: 12px; pointer-events: auto; }
+.touch-actions { position: absolute; right: calc(16px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); display: flex; align-items: flex-end; gap: 10px; pointer-events: auto; }
 .touch-btn {
-  width: 74px; height: 74px; border-radius: 50%; pointer-events: auto; font-family: var(--serif); font-size: 22px;
-  color: #241508; background: radial-gradient(circle at 34% 26%, #ffd7a5, #e7a05c 50%, #a85a2e);
-  border: 1px solid rgba(255,220,175,.7); box-shadow: 0 6px 30px rgba(220,130,60,.35), inset 0 1px 0 rgba(255,255,255,.4);
+  width: 52px; height: 52px; border-radius: 0; pointer-events: auto; font-family: var(--serif); font-size: 20px;
+  color: #1c1006; background: linear-gradient(180deg, #f3b274, #d07a3e);
+  border: 2px solid rgba(255,220,175,.8); box-shadow: 0 4px 14px rgba(220,130,60,.35), inset 0 1px 0 rgba(255,255,255,.5);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; touch-action: none;
 }
-.touch-btn:active { transform: scale(.95); filter: brightness(.95); }
-.touch-btn small { font-family: var(--sans); font-size: 7.5px; letter-spacing: .16em; font-weight: 700; color: rgba(40,20,8,.7); }
+.touch-btn:active { border-color: #ffe0b0; filter: brightness(1.1); }
+.touch-btn small { font-family: var(--sans); font-size: 7px; letter-spacing .14em; font-weight: 700; color: rgba(30,12,4,.8); }
 .touch-btn.small {
-  width: 54px; height: 54px; font-size: 16px; color: var(--ink-dim); background: rgba(13,18,27,.8);
-  border-color: rgba(255,255,255,.13); box-shadow: 0 4px 18px rgba(0,0,0,.35);
+  width: 44px; height: 44px; font-size: 14px; color: var(--ink-dim); background: rgba(13,18,27,.8);
+  border-color: rgba(255,255,255,.15); box-shadow: 0 3px 10px rgba(0,0,0,.35);
 }
 .touch-btn.small small { color: var(--ink-faint); }
 @media (min-width: 1100px) and (pointer: fine) { body.show-touch .touch-controls { display: none; } }

@@ -178,6 +178,11 @@
   <div id="fade" class="fade"></div>
   <div id="flash" class="flash"></div>
 </div>
+<script>
+window.__ERRS=[];
+window.onerror=function(m,u,l,c,err){window.__ERRS.push(String(m)+(err?' :: '+String(err.stack&&err.stack.slice(0,150)):''));return true;};
+window.onunhandledrejection=function(e){window.__ERRS.push('REJ '+String(e.reason&&e.reason.slice?e.reason.slice(0,150):e.reason));};
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

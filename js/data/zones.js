@@ -67,64 +67,71 @@ function buildHearthfall() {
   const rng = mulberry32(7331);
   border(m, '#', 2);
   // grass variety
-  scatter(m, '"', 34, rng, { x: 2, y: 2, w: 32, h: 20 });
-  scatter(m, ',', 22, rng, { x: 2, y: 2, w: 32, h: 20 });
-  scatter(m, '#', 16, rng, { x: 2, y: 2, w: 32, h: 20 });
-  scatter(m, 'r', 8, rng, { x: 2, y: 2, w: 32, h: 20 });
-
-  // south gate corridor
-  rect(m, 15, 20, 5, 4, '_');
-  put(m, 17, 22, 'P'); put(m, 16, 22, '_'); put(m, 18, 22, '_');
-  put(m, 17, 23, '_');
-
-  // central plaza
-  rect(m, 13, 9, 9, 6, '=');
-  put(m, 17, 9, 'A');
-  put(m, 15, 10, 'o'); put(m, 19, 10, 'o');
-  put(m, 14, 13, 'S');
-
-  // roads
-  vline(m, 17, 15, 21, '_', 1);
-  hline(m, 7, 13, 11, '_');
-  hline(m, 20, 27, 11, '_');
-  vline(m, 15, 7, 8, '_');
-  hline(m, 15, 17, 8, '_');
-  vline(m, 7, 12, 12, '_');
-  vline(m, 27, 12, 12, '_');
-  hline(m, 12, 13, 11, '_');
+  scatter(m, '"', 24, rng, { x: 2, y: 2, w: 32, h: 20 });
+  scatter(m, ',', 16, rng, { x: 2, y: 2, w: 32, h: 20 });
+  scatter(m, '#', 10, rng, { x: 2, y: 2, w: 32, h: 20 });
+  scatter(m, 'r', 6, rng, { x: 2, y: 2, w: 32, h: 20 });
 
   // buildings
-  house(m, 12, 3, 7, 4);       // elder hall
-  house(m, 4, 7, 7, 5);        // inn
-  house(m, 25, 7, 6, 5);       // forge
-  house(m, 21, 15, 5, 4);      // player's house
-  // small shrine
-  rect(m, 29, 17, 4, 3, 'W'); rect(m, 30, 18, 2, 1, '='); put(m, 30, 20, 'S');
-  put(m, 33, 18, 'o');
+  house(m, 10, 2, 7, 4);      // elder hall (north of square)
+  house(m, 2, 8, 7, 5);       // inn (west)
+  house(m, 25, 6, 6, 5);      // forge (east)
+  house(m, 20, 16, 5, 4);     // player's cottage (south-east)
 
-  // garden
+  // market stalls (east of the square)
+  rect(m, 22, 10, 4, 2, 'n');
+  put(m, 21, 9, 'i');         // stall sign
+  put(m, 25, 9, 'i');
+
+  // central festival square (stone)
+  rect(m, 13, 8, 9, 6, '=');
+  put(m, 14, 11, 'S');        // hearth crystal at square centre
+  put(m, 12, 10, 'o');        // festival braziers
+  put(m, 18, 10, 'o');
+  put(m, 15, 12, 'o');
+  put(m, 17, 13, 'o');
+  put(m, 13, 7, 'L');         // paper lanterns
+  put(m, 21, 7, 'L');
+  put(m, 13, 14, 'L');
+  put(m, 21, 14, 'L');
+
+  // notice board
+  put(m, 20, 7, 'i');
+
+  // roads
+  vline(m, 17, 5, 21, '_', 1);          // main street
+  hline(m, 7, 13, 11, '_');             // west road to inn
+  hline(m, 20, 27, 11, '_');            // east road
+  hline(m, 15, 17, 8, '_');             // elder hall approach
+  vline(m, 10, 6, 6, '_');              // elder hall path
+  vline(m, 7, 12, 12, '_');             // inn path
+  vline(m, 27, 12, 12, '_');            // forge path
+
+  // south gate + gatehouse
+  rect(m, 13, 18, 9, 3, '_');
+  rect(m, 14, 17, 7, 2, 'H');
+  put(m, 17, 18, 'D');
+  put(m, 17, 22, 'P');
+  put(m, 16, 22, '_'); put(m, 18, 22, '_'); put(m, 17, 23, '_');
+  rect(m, 13, 23, 9, 1, '#');
+
+  // pond (southwest)
+  rect(m, 1, 17, 7, 4, '~');
+  put(m, 0, 16, '~'); put(m, 8, 19, 's'); put(m, 7, 20, 's');
+  put(m, 4, 16, 'w'); put(m, 3, 21, 'w');
+
+  // garden (south of inn)
   outline(m, 9, 15, 5, 4, 'f');
   rect(m, 10, 16, 3, 2, ',');
   put(m, 11, 17, '"');
+  put(m, 8, 16, 'i');    // garden sign
 
-  // pond
-  rect(m, 2, 18, 6, 4, '~');
-  put(m, 1, 17, '~'); put(m, 8, 20, 's'); put(m, 7, 21, 's');
-  put(m, 4, 17, 'w'); put(m, 3, 22, 'w');
-
-  // decorations
-  put(m, 20, 7, 'i');   // notice board
-  put(m, 22, 12, 'f'); put(m, 23, 12, 'f');
-  put(m, 12, 14, 'a');
-  put(m, 28, 14, 'C');
-  put(m, 2, 12, 'L'); put(m, 33, 12, 'L');
-  scatter(m, '#', 10, rng, { x: 31, y: 2, w: 3, h: 8 });
-  scatter(m, 't', 3, rng, { x: 2, y: 3, w: 2, h: 8 });
-
-  // clear tree ring around south gate
-  rect(m, 14, 20, 7, 4, '_');
-  put(m, 17, 22, 'P');
-  rect(m, 13, 23, 9, 1, '#');
+  // tree groves
+  scatter(m, '#', 8, rng, { x: 28, y: 2, w: 6, h: 6 });
+  scatter(m, 'T', 2, rng, { x: 29, y: 3, w: 4, h: 4 });
+  scatter(m, '#', 8, rng, { x: 2, y: 11, w: 6, h: 8 });
+  scatter(m, 'T', 1, rng, { x: 3, y: 13, w: 3, h: 4 });
+  scatter(m, 't', 2, rng, { x: 2, y: 3, w: 2, h: 6 });
 
   return m;
 }
@@ -470,25 +477,26 @@ export const ZONES = {
       { x: 17, y: 22, to: 'emberfield', toX: 20, toY: 2, label: 'Emberfield' },
     ],
     npcs: [
-      { id: 'maro', name: 'Elder Maro', x: 18, y: 8, sprite: 'elder', color: '#d9b67a', dialog: 'elder' },
-      { id: 'barda', name: 'Barda', x: 27, y: 13, sprite: 'smith', color: '#c98a55', shop: 'hearthfall', dialog: 'smith' },
-      { id: 'nessa', name: 'Nessa', x: 7, y: 13, sprite: 'inn', color: '#c78a8a', rest: true, dialog: 'innkeeper' },
-      { id: 'yara', name: 'Yara', x: 11, y: 14, sprite: 'herbalist', color: '#8fbf7a', dialog: 'herbalist' },
-      { id: 'pip', name: 'Pip', x: 21, y: 11, sprite: 'child', color: '#e0c07a', dialog: 'child' },
+      { id: 'maro', name: 'Elder Maro', x: 17, y: 11, sprite: 'elder', color: '#d9b67a', dialog: 'elder', wander: true },
+      { id: 'barda', name: 'Barda', x: 26, y: 11, sprite: 'smith', color: '#c98a55', shop: 'hearthfall', dialog: 'smith' },
+      { id: 'nessa', name: 'Nessa', x: 6, y: 13, sprite: 'inn', color: '#c78a8a', rest: true, dialog: 'innkeeper', wander: true },
+      { id: 'yara', name: 'Yara', x: 14, y: 16, sprite: 'herbalist', color: '#8fbf7a', dialog: 'herbalist' },
+      { id: 'pip', name: 'Pip', x: 20, y: 11, sprite: 'child', color: '#e0c07a', dialog: 'child', wander: true },
       { id: 'oma', name: 'Seer Oma', x: 5, y: 15, sprite: 'seer', color: '#b79bea', dialog: 'seer' },
-      { id: 'rhen', name: 'Guard Rhen', x: 16, y: 19, sprite: 'guard', color: '#9b8a6a', dialog: 'guard' },
+      { id: 'rhen', name: 'Guard Rhen', x: 17, y: 19, sprite: 'guard', color: '#9b8a6a', dialog: 'guard' },
     ],
     chests: [
       { id: 'hf_chest1', x: 28, y: 14, loot: { gold: 55, item: 'tonic', n: 2 } },
       { id: 'hf_chest2', x: 30, y: 18, loot: { gold: 30, gear: 'travelerCharm' } },
     ],
-    crystals: [{ id: 'hf_crystal', x: 14, y: 13 }],
+    crystals: [{ id: 'hf_crystal', x: 14, y: 11 }],
     braziers: [
-      { id: 'hf_b1', x: 15, y: 10 }, { id: 'hf_b2', x: 19, y: 10 },
+      { id: 'hf_b1', x: 12, y: 10 }, { id: 'hf_b2', x: 18, y: 10 },
+      { id: 'hf_b3', x: 15, y: 12 }, { id: 'hf_b4', x: 17, y: 13 },
     ],
     signs: [
       { x: 20, y: 7, text: 'NOTICE FROM THE ELDER\n\nThe Emberwake festival begins at dusk. All villagers are to bring a coal from their hearth to the square. Do not wander beyond the tree line after dark.' },
-      { x: 11, y: 17, text: 'Yara\'s Garden\n\n"Please do not pick the moonpetals. They only bloom for the moon, and they are not ours."' },
+      { x: 8, y: 16, text: 'Yara\'s Garden\n\n"Please do not pick the moonpetals. They only bloom for the moon, and they are not ours."' },
     ],
     triggers: [],
     encounters: ['ashling', 'emberwolf', 'husk'], encRate: 0,
